@@ -1,24 +1,17 @@
 const Redis = require('ioredis');
 
-// Ensure that we handle connections gracefully
-const redisConfig = {
-    host: process.env.REDIS_HOST || 'localhost',
+const redisClient = new Redis({
+    host: process.env.REDIS_HOST || '127.0.0.1',
     port: process.env.REDIS_PORT || 6379,
     password: process.env.REDIS_PASSWORD || '',
-    maxRetriesPerRequest: null // Required by BullMQ
-};
-
-const redisClient = new Redis(redisConfig);
-
-redisClient.on('connect', () => {
-    console.log('Redis Client Connected');
+    retryStrategy: (times) => {
+        // Reconnect after
+        return Math.min(times * 50, 2000);
+    }
 });
 
 redisClient.on('error', (err) => {
-    console.error(`Redis Connection Error: ${err.message}`);
+    console.error('Redis connection error:', err);
 });
 
-module.exports = {
-    redisClient,
-    redisConfig
-};
+module.exports = redisClient;

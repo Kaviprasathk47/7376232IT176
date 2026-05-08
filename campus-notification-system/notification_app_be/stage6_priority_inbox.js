@@ -1,4 +1,5 @@
-const axios = require('axios');
+require('dotenv').config();
+const externalNotificationService = require('./src/services/externalNotificationService');
 
 class MinHeap {
     constructor(capacity) {
@@ -6,24 +7,12 @@ class MinHeap {
         this.capacity = capacity;
     }
 
-    getScore(notification) {
-        let weight = 0;
-        // Priority: Placement > Result > Event
-        switch (notification.Type) {
-            case 'Placement': weight = 30000000000000; break;
-            case 'Result': weight = 20000000000000; break;
-            case 'Event': weight = 10000000000000; break;
-        }
-        return weight + new Date(notification.Timestamp).getTime();
-    }
-
     insert(notification) {
-        const item = { ...notification, score: this.getScore(notification) };
         if (this.heap.length < this.capacity) {
-            this.heap.push(item);
+            this.heap.push(notification);
             this.bubbleUp(this.heap.length - 1);
-        } else if (item.score > this.heap[0].score) {
-            this.heap[0] = item;
+        } else if (notification.priorityScore > this.heap[0].priorityScore) {
+            this.heap[0] = notification;
             this.sinkDown(0);
         }
     }
@@ -31,7 +20,7 @@ class MinHeap {
     bubbleUp(index) {
         while (index > 0) {
             const parentIndex = Math.floor((index - 1) / 2);
-            if (this.heap[parentIndex].score <= this.heap[index].score) break;
+            if (this.heap[parentIndex].priorityScore <= this.heap[index].priorityScore) break;
             this.swap(index, parentIndex);
             index = parentIndex;
         }
@@ -49,7 +38,7 @@ class MinHeap {
 
             if (leftChildIdx < length) {
                 leftChild = this.heap[leftChildIdx];
-                if (leftChild.score < element.score) {
+                if (leftChild.priorityScore < element.priorityScore) {
                     swapIdx = leftChildIdx;
                 }
             }
@@ -57,8 +46,8 @@ class MinHeap {
             if (rightChildIdx < length) {
                 rightChild = this.heap[rightChildIdx];
                 if (
-                    (swapIdx === null && rightChild.score < element.score) ||
-                    (swapIdx !== null && rightChild.score < leftChild.score)
+                    (swapIdx === null && rightChild.priorityScore < element.priorityScore) ||
+                    (swapIdx !== null && rightChild.priorityScore < leftChild.priorityScore)
                 ) {
                     swapIdx = rightChildIdx;
                 }
@@ -75,30 +64,24 @@ class MinHeap {
     }
 
     getTopK() {
-        return [...this.heap].sort((a, b) => b.score - a.score);
+        return [...this.heap].sort((a, b) => b.priorityScore - a.priorityScore);
     }
 }
 
-async function fetchAndCalculatePriority() {
+async function runPriorityInbox() {
     try {
-        console.log("Fetching notifications from Evaluation API...");
+        console.log("Fetching notifications from External API Service...");
         
-        // Fetching from the provided evaluation service
-        // Since it's a protected route (as per constraints), assuming we have a mock token or it works without one for the test
-        const response = await axios.get('http://4.224.186.213/evaluation-service/notifications', {
-            // headers: { Authorization: `Bearer <token>` }
-        });
-        
-        const notifications = response.data.notifications;
+        // This utilizes the stale-while-revalidate strategy and exponential backoff
+        const notifications = await externalNotificationService.getNotifications();
         
         if (!notifications || notifications.length === 0) {
             console.log("No notifications found.");
-            return;
+            process.exit(0);
         }
 
-        console.log(`Successfully fetched ${notifications.length} notifications. Processing top 10...`);
+        console.log(`Successfully retrieved ${notifications.length} notifications. Processing top 10...`);
         
-        // Use Min Heap to keep top 10 efficiently
         const minHeap = new MinHeap(10);
         
         notifications.forEach(notification => {
@@ -109,12 +92,14 @@ async function fetchAndCalculatePriority() {
 
         console.log("\n--- TOP 10 PRIORITY INBOX ---");
         top10.forEach((notif, index) => {
-            console.log(`${index + 1}. [${notif.Type}] ${notif.Message} | Time: ${notif.Timestamp} (Score: ${notif.score})`);
+            console.log(`${index + 1}. [${notif.type}] ${notif.message} | Time: ${notif.timestamp} (Score: ${notif.priorityScore})`);
         });
         
+        process.exit(0);
     } catch (error) {
-        console.error("Error fetching notifications:", error.message);
+        console.error("Critical Error generating Priority Inbox:", error.message);
+        process.exit(1);
     }
 }
 
-fetchAndCalculatePriority();
+runPriorityInbox();
