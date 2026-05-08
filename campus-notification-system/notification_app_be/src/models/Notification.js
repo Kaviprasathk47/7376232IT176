@@ -1,34 +1,24 @@
 const mongoose = require('mongoose');
-const { NOTIFICATION_TYPES } = require('../constants');
 
 const notificationSchema = new mongoose.Schema({
-    studentId: {
-        type: Number,
-        required: true,
-        index: true
-    },
+    studentId: Number,
+
     type: {
         type: String,
-        enum: Object.values(NOTIFICATION_TYPES),
-        required: true
+        enum: ['Placement', 'Result', 'Event']
     },
-    message: {
-        type: String,
-        required: true
-    },
+
+    message: String,
+
     isRead: {
         type: Boolean,
-        default: false,
-        index: true
+        default: false
     },
+
     createdAt: {
         type: Date,
-        default: Date.now,
-        index: true
+        default: Date.now
     }
 });
-
-// Compound index for optimizing the unread query (Stage 3 solution)
-notificationSchema.index({ studentId: 1, isRead: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Notification', notificationSchema);

@@ -1,4 +1,4 @@
-const { NOTIFICATION_TYPES } = require('../constants');
+const axios = require('axios');
 
 class MinHeap {
     constructor(capacity) {
@@ -6,27 +6,19 @@ class MinHeap {
         this.capacity = capacity;
     }
 
-    // Calculate score. Placement > Result > Event + recency
     getScore(notification) {
         let weight = 0;
-        switch (notification.type) {
-            case NOTIFICATION_TYPES.PLACEMENT:
-                weight = 30000000000000;
-                break;
-            case NOTIFICATION_TYPES.RESULT:
-                weight = 20000000000000;
-                break;
-            case NOTIFICATION_TYPES.EVENT:
-                weight = 10000000000000;
-                break;
+        // Priority: Placement > Result > Event
+        switch (notification.Type) {
+            case 'Placement': weight = 30000000000000; break;
+            case 'Result': weight = 20000000000000; break;
+            case 'Event': weight = 10000000000000; break;
         }
-        // Add timestamp to weight to handle recency
-        return weight + new Date(notification.createdAt).getTime();
+        return weight + new Date(notification.Timestamp).getTime();
     }
 
     insert(notification) {
         const item = { ...notification, score: this.getScore(notification) };
-        
         if (this.heap.length < this.capacity) {
             this.heap.push(item);
             this.bubbleUp(this.heap.length - 1);
@@ -40,7 +32,6 @@ class MinHeap {
         while (index > 0) {
             const parentIndex = Math.floor((index - 1) / 2);
             if (this.heap[parentIndex].score <= this.heap[index].score) break;
-            
             this.swap(index, parentIndex);
             index = parentIndex;
         }
@@ -74,7 +65,6 @@ class MinHeap {
             }
 
             if (swapIdx === null) break;
-
             this.swap(index, swapIdx);
             index = swapIdx;
         }
@@ -84,10 +74,47 @@ class MinHeap {
         [this.heap[i], this.heap[j]] = [this.heap[j], this.heap[i]];
     }
 
-    // Return descending sorted elements
     getTopK() {
         return [...this.heap].sort((a, b) => b.score - a.score);
     }
 }
 
-module.exports = MinHeap;
+async function fetchAndCalculatePriority() {
+    try {
+        console.log("Fetching notifications from Evaluation API...");
+        
+        // Fetching from the provided evaluation service
+        // Since it's a protected route (as per constraints), assuming we have a mock token or it works without one for the test
+        const response = await axios.get('http://4.224.186.213/evaluation-service/notifications', {
+            // headers: { Authorization: `Bearer <token>` }
+        });
+        
+        const notifications = response.data.notifications;
+        
+        if (!notifications || notifications.length === 0) {
+            console.log("No notifications found.");
+            return;
+        }
+
+        console.log(`Successfully fetched ${notifications.length} notifications. Processing top 10...`);
+        
+        // Use Min Heap to keep top 10 efficiently
+        const minHeap = new MinHeap(10);
+        
+        notifications.forEach(notification => {
+            minHeap.insert(notification);
+        });
+
+        const top10 = minHeap.getTopK();
+
+        console.log("\n--- TOP 10 PRIORITY INBOX ---");
+        top10.forEach((notif, index) => {
+            console.log(`${index + 1}. [${notif.Type}] ${notif.Message} | Time: ${notif.Timestamp} (Score: ${notif.score})`);
+        });
+        
+    } catch (error) {
+        console.error("Error fetching notifications:", error.message);
+    }
+}
+
+fetchAndCalculatePriority();
